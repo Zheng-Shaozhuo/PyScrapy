@@ -1,10 +1,10 @@
 # PyScrapy
 使用手册
 
-1、指定起始URL, 即类初始化时传入
-2、配置正则URL pattern, set_config函数中传入, 参数dict类型
-3、指定目标URL处理函数, 暂定为 func_reflex(web_url, web_content, html_parse_obj), setattr传入
-4、执行类run函数，启动执行
+1、指定起始URL, 即类初始化时传入  
+2、配置正则URL pattern, set_config函数中传入, 参数dict类型  
+3、指定目标URL处理函数, 暂定为 func_reflex(web_url, web_content, html_parse_obj), setattr传入  
+4、执行类run函数，启动执行  
 
 例:
 ```
