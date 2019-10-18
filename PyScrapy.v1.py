@@ -70,18 +70,18 @@ class Utils(object):
                 return None
 
 
-    def http_save_file(self, _url, _path, _file):
+    def save_file(self, file_content, file_path):
         """
         根据链接下载文件
         """
+        file_dir = os.path.dirname(file_path)
         # 目录检测
-        if os.path.exists(_path) is False:
-            os.makedirs(_path)
-        # 文件读取
-        file_content = self.http_crawl(_url)
+        if os.path.exists(file_dir) is False:
+            os.makedirs(file_dir)
+        # 文件写入
         if file_content is None:
             return
-        with open(os.path.join(_path, _file), 'wb') as code:
+        with open(file_path, 'wb') as code:
             code.write(file_content)
 
 
@@ -89,8 +89,7 @@ class Utils(object):
         """
         清洗符号
         """
-        return re.sub(ur"[\s+\.\!\/_,$%^*()+\"\':;]+|[+—！，。？、~@#￥%……&*（）《》“”：；]+", "", _str.decode("utf-8"))
-
+        return re.sub(r"[\s+\.\!\/_,$%^*()+\"\':;]+|[+—！，。？、~@#￥%……&*（）《》“”：；]+", "", _str)
 
 
 class PyScarpy(object):
@@ -270,41 +269,67 @@ class PyScarpy(object):
             if is_target:
                 self.func_reflex(_url, web_content, soup)
 
-            # 拉取图片
-            if soup is None:
-                soup = BeautifulSoup(web_content, 'html.parser')
-            # 文件相关配置
-            t_file = self._conf.get('target_file', {})
-            title_dir = ''
-            if t_file.get('gd_dir', False) is True:
-                title_dir = soup.title.string
-                if len(title_dir) == 0 or title_dir == '':
-                    title_dir = "dir_{}".format(self.utils.get_str_md5(_url))
-                title_dir = "{}".format(self.utils.get_wash_str(title_dir))
+            self.func_file_reflex(_url, web_content, soup)
 
-            img_tags = soup.find_all('img')
-            for _tag in img_tags:
-                if _tag.attrs.has_key('src'):
-                    img_src = _tag['src'].lower()
-                    if img_src.startswith('http') or img_src.startswith('data'):
-                        pass
-                    else:
-                        if img_src.startswith('/') is False:
-                            u_params = _url.split('/')
-                            u_params[-1] = img_src
-                            img_src = '/'.join(u_params)
-                        else:
-                            img_src = urlparse.urljoin(self._domain, img_src)
 
-                    if img_src.startswith('http'):
-                        if '?' in img_src:
-                            _file = img_src[:img_src.index('?')].split('/')[-1]
-                        _file = img_src.split('/')[-1]
-                    else:
-                        _file = "{}_{}.jpg".format(int(time.time()), self.utils.get_str_md5(img_src))
+    # 对外函数 def func_file_reflex(web_url, web_content, html_parse_obj)
+    def func_file_reflex(self, web_url, web_content, html_parse_obj=None):
+        """
+        处理目标页面数据
+        """
+        if html_parse_obj is None:
+            html_parse_obj = BeautifulSoup(web_content, 'html.parser')
 
-                    self.utils.http_save_file(img_src, os.path.join(t_file.get('_path', os.path.join(os.getcwd(), 'images')), title_dir), \
-                        "{}_{}".format(t_file.get('_prefix'), _file) if t_file.get('_prefix', '') != '' else _file)
+        # 文件相关配置
+        t_file = self._conf.get('target_file', {})
+        title_dir = ''
+        if t_file.get('gd_dir', False) is True:
+            title_dir = html_parse_obj.title.string
+            if len(title_dir) == 0 or title_dir == '':
+                title_dir = "dir_{}".format(self.utils.get_str_md5(web_url))
+            title_dir = "{}".format(self.utils.get_wash_str(title_dir))
+        file_dir = os.path.join(t_file.get('_path', os.path.join(os.getcwd(), 'images')), title_dir)
+        file_prefix = ''
+        if t_file.get('_prefix', '') != '':
+            file_prefix = "{}_".format(t_file.get('_prefix'))
+
+        # 拉取图片
+        img_tags = html_parse_obj.find_all('img')
+        for _tag in img_tags:
+            if _tag.attrs.has_key('src') is False:
+                continue
+            img_src = _tag['src'].lower()
+            if img_src.startswith('http') or img_src.startswith('data'):
+                pass
+            else:
+                if img_src.startswith('/') is False:
+                    u_params = web_url.split('/')
+                    u_params[-1] = img_src
+                    img_src = '/'.join(u_params)
+                else:
+                    img_src = urlparse.urljoin(self._domain, img_src)
+
+            # 是否目标图片
+            is_target = False
+            for t_f_url in self._conf.get('target_file_urls'):
+                if self.utils.url_check(img_src, t_f_url):
+                    is_target = True
+                    break
+            if is_target is False:
+                continue
+
+            if img_src.startswith('http'):
+                if '?' in img_src:
+                    _file = img_src[:img_src.index('?')].split('/')[-1]
+                _file = img_src.split('/')[-1]
+            else:
+                _file = "{}_{}.jpg".format(int(time.time()), self.utils.get_str_md5(img_src))
+
+            web_content = self.utils.http_crawl(img_src)
+            if web_content is None:
+                return
+            file_path = os.path.join(file_dir, "{}{}".format(file_prefix, _file))
+            self.utils.save_file(web_content, file_path)
 
 
     def worker(self):
@@ -333,15 +358,14 @@ class PyScarpy(object):
         """
         处理目标页面数据
         """
-        pass
-
-    # def func_reflex(web_url, web_content, html_parse_obj):
-    #     """
-    #     目标页面解析
-    #     """
-    #     if html_parse_obj is None:
-    #         html_parse_obj = BeautifulSoup(web_content, 'html.parser')
-    #     print web_url
+        if html_parse_obj is None:
+            html_parse_obj = BeautifulSoup(web_content, 'html.parser')
+        title = self.utils.get_wash_str(html_parse_obj.title.string)
+        if len(title) == 0 or title == '':
+            title = self.utils.get_str_md5(web_url)
+        file_path = os.path.join(os.getcwd(), 'html', "{}.html".format(title))
+        # 保存至文件
+        self.utils.save_file(web_content, file_path)
 
 
     def run(self):
