@@ -92,7 +92,7 @@ class Utils(object):
         return re.sub(r"[\s+\.\!\/_,$%^*()+\"\':;]+|[+—！，。？、~@#￥%……&*（）《》“”：；]+", "", _str)
 
 
-class PyScarpy(object):
+class PyScrapy(object):
     """
     爬虫类
     """
@@ -217,7 +217,7 @@ class PyScarpy(object):
                 is_target = True
                 break
 
-        if is_target is True and self._conf.get('is_resurs') is False:
+        if is_target is True and self._conf.get('is_resurs') is False and _url != self.u_start:
             return web_content, soup, is_target
 
         soup = BeautifulSoup(web_content, 'html.parser')
