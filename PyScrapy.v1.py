@@ -102,10 +102,10 @@ class PyScrapy(object):
         self.u_start = u_start
         # 消费队列
         self.q = None
+        # 临时消费队列
+        self.q_match = None
         # 多线程锁
         self.t_lock = None
-        # 已消费集合
-        self._consumed = set()
         # 主站
         self._domain = None
         # 配置参数
@@ -202,10 +202,6 @@ class PyScrapy(object):
         soup = None
         is_target = True
 
-        # 处理已消费数据
-        _md5 = self.utils.get_str_md5(_url)
-        self._consumed.add(_md5)
-
         # 抓取网页
         web_content = self.utils.http_crawl(_url)
         if web_content is None:
@@ -241,10 +237,8 @@ class PyScrapy(object):
             if self.url_math(a_href) is False:
                 continue
             # 已抓取过记录弃
-            a_href_md5 = self.utils.get_str_md5(a_href)
-            if a_href_md5 in self._consumed:
-                continue
-            self.q.put(a_href)
+            # a_href_md5 = self.utils.get_str_md5(a_href)
+            self.q_match.put(a_href)
 
         return web_content, soup, is_target
 
@@ -379,9 +373,12 @@ class PyScrapy(object):
         self.init_data()
         if self.init_check() is False:
             return
-
+        
+        # 带爬取队列
         self.q = Queue.Queue(maxsize=self._conf['queue_size'])
         self.q.put(self.u_start)
+        # 临时队列
+        self.q_match = Queue.Queue()
 
         # 多线程工作
         # _thread.isAlive() 进程是否存活
@@ -397,16 +394,27 @@ class PyScrapy(object):
             work_threads.append(t_thread)
             time.sleep(0.01)
 
+        # 已消费集合
+        _consumed = {self.utils.get_str_md5((self.u_start))}
         # 主进程检查, 若连续15s队列为空, 即标识为抓取结束
         check_cnt = 0
         while True:
+            q_math_size = self.q_match.qsize()
+            if q_math_size > 0:
+                for i in range(q_math_size):
+                    url = self.q_match.get()
+                    url_md5 = self.utils.get_str_md5(url)
+                    if url_md5 not in _consumed:
+                        _consumed.add(url_md5)
+                        self.q.put(url)
+
             if self.q.qsize() == 0:
                 check_cnt += 1
-                if check_cnt >= 1350:
+                time.sleep(0.01)
+                if check_cnt >= 1500:
                     break
             else:
                 check_cnt = 0
-            time.sleep(0.01)
 
-        print ("[SCRAPY_MSG] url='{}' crawl size={}.".format(self.u_start, len(self._consumed)))
+        print ("[SCRAPY_MSG] url='{}' crawl size={}.".format(self.u_start, len(_consumed)))
         print ("[SCRAPY_MSG] crawl End.")
